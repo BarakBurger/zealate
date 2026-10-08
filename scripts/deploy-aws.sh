@@ -24,8 +24,11 @@ if [[ "$DRY" == "--dry" ]]; then
 fi
 
 # Hashed assets never change, so they cache for a year; the shell must always be fresh.
-aws s3 sync dist/web "s3://$BUCKET/site" --delete --exclude index.html \
+aws s3 sync dist/web/assets "s3://$BUCKET/site/assets" --delete \
   --cache-control "public, max-age=31536000, immutable"
+# Unhashed files (favicon, robots.txt) keep their names across releases: an hour, not a year.
+aws s3 sync dist/web "s3://$BUCKET/site" --exclude "assets/*" --exclude index.html \
+  --cache-control "public, max-age=3600"
 aws s3 cp dist/web/index.html "s3://$BUCKET/site/index.html" \
   --cache-control "no-cache" --content-type "text/html; charset=utf-8"
 
@@ -35,6 +38,6 @@ aws lambda update-function-code --region "$REGION" --function-name "$FUNCTION" \
 aws lambda wait function-updated --region "$REGION" --function-name "$FUNCTION"
 
 if [[ -n "$DIST_ID" ]]; then
-  aws cloudfront create-invalidation --distribution-id "$DIST_ID" --paths "/index.html" "/" --query Invalidation.Id --output text
+  aws cloudfront create-invalidation --distribution-id "$DIST_ID" --paths "/index.html" "/" "/robots.txt" "/favicon.svg" --query Invalidation.Id --output text
 fi
 echo "deployed: https://zealate.com"
