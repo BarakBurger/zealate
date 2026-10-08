@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, CaretLeft, CaretRight, ListBullets, PencilSimpleLine, X } from '@phosphor-icons/react';
 import { api, ApiError, type Book, type Chapter } from '../lib/api';
-import { textDir, useI18n } from '../lib/i18n';
+import { textDir, textLang, useI18n } from '../lib/i18n';
 import { chapterHtml, countSpreads, paragraphsOf } from '../lib/bookText';
 import { NotFound } from './NotFound';
 
@@ -230,7 +230,7 @@ export const Reader = () => {
           style={{ width: geo.w * geo.per, height: geo.h, borderRadius: geo.two ? 6 : '3px 8px 8px 3px' }}>
           <div className="page-view" ref={viewRef} aria-live="polite"
             style={{ top: geo.top, bottom: geo.bottom, insetInlineStart: geo.outer, insetInlineEnd: geo.outer }}>
-            <div className="flow" ref={flowRef} dir={bookDir} lang={bookDir === 'rtl' ? 'he' : 'en'}
+            <div className="flow" ref={flowRef} dir={bookDir} lang={textLang(`${chapter.title} ${chapter.body.slice(0, 400)}`)}
               style={{ columnWidth: geo.colW, columnGap: geo.gap, fontSize: geo.font, lineHeight: 1.62 }}>
               <span className="chap-no">{t.chapter} {chapterNo}</span>
               <h1 dir="auto">{chapter.title}</h1>

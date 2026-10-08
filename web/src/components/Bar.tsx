@@ -1,11 +1,11 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { BookOpenText, SignOut, Translate } from '@phosphor-icons/react';
-import { useI18n } from '../lib/i18n';
+import { LANGS, useI18n, type Lang } from '../lib/i18n';
 import { useAuth } from '../lib/auth';
 import { SearchBox } from './SearchBox';
 
 export const Bar = () => {
-  const { t, toggle } = useI18n();
+  const { t, lang, setLang } = useI18n();
   const { user, logout } = useAuth();
   const nav = useNavigate();
   return (
@@ -16,9 +16,13 @@ export const Bar = () => {
       </Link>
       <div className="bar-search"><SearchBox /></div>
       <nav className="bar-actions" aria-label="Account">
-        <button type="button" className="btn btn-ghost btn-sm" onClick={toggle} aria-label={t.language}>
-          <Translate size={18} aria-hidden="true" /> <span>{t.language}</span>
-        </button>
+        <label className="lang-pick">
+          <Translate size={18} aria-hidden="true" />
+          <span className="sr-only">{t.language}</span>
+          <select value={lang} onChange={e => setLang(e.target.value as Lang)} aria-label={t.language}>
+            {LANGS.map(l => <option key={l.code} value={l.code} lang={l.code}>{l.name}</option>)}
+          </select>
+        </label>
         {user ? (
           <>
             <Link to="/desk" className="btn btn-sm"><BookOpenText size={18} aria-hidden="true" /> {t.myDesk}</Link>

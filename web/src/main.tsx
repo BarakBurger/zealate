@@ -31,7 +31,7 @@ const App = () => {
   const { t } = useI18n();
   return (
     <>
-      <a className="skip" href="#main">{t.contents === 'Contents' ? 'Skip to content' : 'דילוג לתוכן'}</a>
+      <a className="skip" href="#main">{t.skip}</a>
       <Bar />
       <RouteFocus />
       <Routes>

@@ -32,6 +32,7 @@ type PublicEntry = {
   chapterTitles: string[]; chapterCount: number; updatedAt: string;
 };
 
+const SITE = 'https://zealate.com';
 const MAX_COVER_BYTES = 4 * 1024 * 1024;
 const MAX_CHAPTER_CHARS = 400_000;
 const COVER_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
@@ -51,9 +52,12 @@ const parseBody = (req: Req): any => {
   try { return JSON.parse(req.body.toString('utf8')); } catch { return null; }
 };
 
-/** Hebrew without vowel marks, lower case, single spaces: what search compares. */
+/** Without Hebrew niqqud, Arabic harakat or Latin accents, lower case, single spaces: what search compares. */
 export const normalizeForSearch = (s: string) =>
-  s.normalize('NFKD').replace(/[֑-ׇ̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+  s.normalize('NFKD')
+    .replace(/[֑-ׇ̀-ͯ]/g, '')
+    .replace(/[ً-ٰٟـ]/g, '')
+    .toLowerCase().replace(/\s+/g, ' ').trim();
 
 // Failed logins slow down per username: after 5 misses, one try every 30 seconds. In-memory, so
 // it resets when a Lambda instance is recycled; it is a speed bump for guessing, not a lock.
@@ -133,6 +137,24 @@ const route = async (req: Req, ctx: Ctx): Promise<Res> => {
       return { e, score };
     }).filter(x => x.score > 0).sort((x, y) => y.score - x.score);
     return json(200, { results: scored.slice(0, 48).map(x => x.e) });
+  }
+
+  // The sitemap search engines read (robots.txt points here): the home page, every public book and
+  // every published chapter. Built from the same index search uses, so it is never out of date.
+  if (a === 'sitemap.xml' && m === 'GET') {
+    const index = (await db.getJson<{ books: PublicEntry[] }>('index/public.json'))?.books || [];
+    const urls = [`<url><loc>${SITE}/</loc><changefreq>daily</changefreq></url>`];
+    for (const e of index) {
+      urls.push(`<url><loc>${SITE}/b/${e.id}</loc><lastmod>${e.updatedAt.slice(0, 10)}</lastmod></url>`);
+      const full = await db.getJson<Book>(`books/${e.id}/meta.json`);
+      for (const ch of full?.chapters.filter(chapterPublic) || []) {
+        urls.push(`<url><loc>${SITE}/b/${e.id}/read/${ch.id}</loc><lastmod>${ch.updatedAt.slice(0, 10)}</lastmod></url>`);
+      }
+    }
+    return {
+      status: 200, headers: { 'content-type': 'application/xml; charset=utf-8', 'cache-control': 'public, max-age=3600' },
+      body: `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls.join('')}</urlset>`,
+    };
   }
 
   if (a === 'my' && b === 'books' && m === 'GET') {

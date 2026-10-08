@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, FilePdf } from '@phosphor-icons/react';
 import { api, type Book, type Chapter } from '../lib/api';
-import { textDir, useI18n } from '../lib/i18n';
+import { textDir, textLang, useI18n } from '../lib/i18n';
 import { paragraphsOf } from '../lib/bookText';
 import { NotFound } from './NotFound';
 
@@ -40,7 +40,7 @@ export const PrintBook = () => {
         <span className="muted" style={{ flex: 1, fontSize: '.9rem' }}>{t.printHint}</span>
         <button type="button" className="btn btn-primary" onClick={() => window.print()}><FilePdf size={18} aria-hidden="true" /> {t.printNow}</button>
       </div>
-      <article className="print-book" dir={dir} lang={dir === 'rtl' ? 'he' : 'en'}>
+      <article className="print-book" dir={dir} lang={textLang(`${book.title} ${chapters[0]?.body.slice(0, 400) || ''}`)}>
         <section className="print-title">
           <h1 dir="auto">{book.title}</h1>
           {(book.authorName || book.author || book.ownerDisplay) && <p dir="auto">{book.authorName || book.author || book.ownerDisplay}</p>}

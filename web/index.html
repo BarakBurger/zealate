@@ -1,23 +1,76 @@
 <!doctype html>
-<html lang="he" dir="rtl">
+<html lang="en" dir="ltr">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#1b1510" />
-    <title>Zealate</title>
-    <meta name="description" content="Write books chapter by chapter, and read them like books." />
+    <title>Zealate · Write books chapter by chapter, read them like books</title>
+    <meta name="description" content="Zealate is a free place to write a book chapter by chapter and read it like a real book: true book-sized pages, chapters you publish one at a time, a pen name if you want one, and Word or PDF export." />
+    <link rel="canonical" href="https://zealate.com/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Zealate" />
+    <meta property="og:url" content="https://zealate.com/" />
+    <meta property="og:title" content="Zealate · Write books chapter by chapter, read them like books" />
+    <meta property="og:description" content="Real book-sized pages, chapters you publish one at a time, a pen name if you want one. Hebrew, Arabic and every language. Free." />
+    <meta name="twitter:card" content="summary" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@400;500;700&family=Heebo:wght@400;500;600;700&family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,700;1,9..144,500&display=swap" rel="stylesheet" />
+    <!-- Arabic faces are split by unicode-range, so their files download only when Arabic text appears. -->
+    <link href="https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@400;500;700&family=Heebo:wght@400;500;600;700&family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,700;1,9..144,500&family=Noto+Naskh+Arabic:wght@400;700&family=Noto+Sans+Arabic:wght@400;600;700&display=swap" rel="stylesheet" />
     <script>
-      // Set direction before first paint so the page never flips after loading.
-      try { var l = localStorage.getItem('z_lang') || (navigator.language || '').slice(0, 2); var he = l !== 'en';
-        document.documentElement.lang = he ? 'he' : 'en'; document.documentElement.dir = he ? 'rtl' : 'ltr'; } catch (e) {}
+      // Pick the language before first paint so the page never flips after loading: a saved choice,
+      // then the browser's language, then English.
+      try {
+        var langs = ['he', 'en', 'ar', 'de', 'es', 'fr'];
+        var saved = localStorage.getItem('z_lang');
+        var nav = (navigator.language || '').slice(0, 2).toLowerCase();
+        var l = langs.indexOf(saved) >= 0 ? saved : langs.indexOf(nav) >= 0 ? nav : 'en';
+        document.documentElement.lang = l;
+        document.documentElement.dir = (l === 'he' || l === 'ar') ? 'rtl' : 'ltr';
+      } catch (e) {}
+    </script>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "WebSite", "@id": "https://zealate.com/#site", "name": "Zealate", "url": "https://zealate.com/",
+            "description": "Write books chapter by chapter and read them like books.",
+            "inLanguage": ["he", "en", "ar", "de", "es", "fr"],
+            "potentialAction": { "@type": "SearchAction", "target": "https://zealate.com/?q={search_term_string}", "query-input": "required name=search_term_string" }
+          },
+          {
+            "@type": "WebApplication", "name": "Zealate", "url": "https://zealate.com/", "applicationCategory": "WritingApplication",
+            "operatingSystem": "Any", "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+            "featureList": ["Book-sized pages with a two-page spread", "Chapters written in any order", "Publish chapter by chapter", "Pen names", "Right-to-left Hebrew and Arabic", "Word and PDF export"]
+          }
+        ]
+      }
     </script>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <!-- What a crawler or a reader without JavaScript sees; the app replaces it when it starts. -->
+      <main style="max-width:760px;margin:0 auto;padding:48px 20px;font-family:Georgia,serif;color:#f3e9d6;background:#1b1510">
+        <h1>Zealate: write books chapter by chapter, read them like books</h1>
+        <p>Zealate is a free place to write a book and read it like a real book. Pages are cut to trade-paperback proportions, two side by side on a wide screen, with page numbers that run through the whole book.</p>
+        <h2>What you can do</h2>
+        <ul>
+          <li>Write chapter by chapter, in any order, with every word saved as you type.</li>
+          <li>Keep a book private, then publish it chapter by chapter when you are ready.</li>
+          <li>Sign it with your real name, a pen name, or stay anonymous.</li>
+          <li>Write in any language: Hebrew and Arabic read right to left, page one on the right.</li>
+          <li>Export the whole book to Word or PDF at any time.</li>
+          <li>Find and read public books by title, chapter or author.</li>
+        </ul>
+        <h2>Questions and answers</h2>
+        <h3>Is Zealate free?</h3><p>Yes. Writing, publishing and reading on Zealate are free.</p>
+        <h3>Who can read my book?</h3><p>Nobody until you make it public, and then only the chapters you publish.</p>
+        <h3>Which languages can I write in?</h3><p>Any. The site itself is available in Hebrew, English, Arabic, German, Spanish and French.</p>
+        <p><a href="/signup" style="color:#e9c98a">Start writing</a></p>
+      </main>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

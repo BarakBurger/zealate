@@ -68,8 +68,22 @@ test('chapters reorder, and writes need the site header', async () => {
   assert.equal((await call('POST', '/books', { title: 'x' }, cookie, { 'x-zealate': '' })).status, 403);
 });
 
-test('search ignores Hebrew vowel marks and case', () => {
+test('search ignores Hebrew and Arabic vowel marks and case', () => {
   assert.equal(normalizeForSearch('שָׁלוֹם  World'), 'שלום world');
+  assert.equal(normalizeForSearch('كِتَابٌ'), 'كتاب');
+});
+
+test('the sitemap lists public books and published chapters only', async () => {
+  const { cookie } = await call('POST', '/auth/signup', { username: 'mapper', password: 'password123' });
+  const id = (await call('POST', '/books', { title: 'Mapped' }, cookie)).data.book.id;
+  const pub = (await call('POST', `/books/${id}/chapters`, { title: 'Out' }, cookie)).data.chapter.id;
+  const draft = (await call('POST', `/books/${id}/chapters`, { title: 'Not yet' }, cookie)).data.chapter.id;
+  await call('PUT', `/books/${id}/chapters/${pub}`, { isPublic: true }, cookie);
+  await call('PATCH', `/books/${id}`, { isPublic: true }, cookie);
+  const res = await handle({ method: 'GET', path: '/api/sitemap.xml', query: new URLSearchParams(), headers: {}, body: Buffer.alloc(0) }, ctx);
+  const xml = String(res.body);
+  assert.ok(xml.includes(`/b/${id}</loc>`) && xml.includes(`/read/${pub}`));
+  assert.ok(!xml.includes(draft), 'drafts stay out');
 });
 
 test('chapter list toggle, drafts, insert anywhere, readable texts', async () => {

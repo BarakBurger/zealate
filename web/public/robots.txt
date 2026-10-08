@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+Disallow: /desk
+Disallow: /login
+Disallow: /signup
+Disallow: /b/*/write/
+Disallow: /b/*/print
+
+Sitemap: https://zealate.com/api/sitemap.xml
