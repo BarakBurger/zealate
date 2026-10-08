@@ -1,5 +1,5 @@
 import { Link, useNavigate } from 'react-router-dom';
-import { BookOpenText, SignOut, Translate } from '@phosphor-icons/react';
+import { BookOpenText, GearSix, SignOut, Translate } from '@phosphor-icons/react';
 import { LANGS, useI18n, type Lang } from '../lib/i18n';
 import { useAuth } from '../lib/auth';
 import { SearchBox } from './SearchBox';
@@ -26,6 +26,7 @@ export const Bar = () => {
         {user ? (
           <>
             <Link to="/desk" className="btn btn-sm"><BookOpenText size={18} aria-hidden="true" /> {t.myDesk}</Link>
+            <Link to="/account" className="btn btn-ghost btn-sm btn-icon" aria-label={t.account} title={t.account}><GearSix size={18} aria-hidden="true" /></Link>
             <button type="button" className="btn btn-ghost btn-sm btn-icon" aria-label={t.logout} title={t.logout}
               onClick={async () => { await logout(); nav('/'); }}>
               <SignOut size={18} aria-hidden="true" />

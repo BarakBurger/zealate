@@ -14,6 +14,7 @@ import { BookPage } from './pages/BookPage';
 import { Editor } from './pages/Editor';
 import { Reader } from './pages/Reader';
 import { PrintBook } from './pages/PrintBook';
+import { Account, Forgot, Reset, Verify } from './pages/AccountFlows';
 import { NotFound } from './pages/NotFound';
 
 /** Land at the top of each new page, and give screen readers the new page's main region. */
@@ -39,6 +40,10 @@ const App = () => {
         <Route path="/login" element={<Auth mode="login" />} />
         <Route path="/signup" element={<Auth mode="signup" />} />
         <Route path="/desk" element={<Desk />} />
+        <Route path="/forgot" element={<Forgot />} />
+        <Route path="/reset" element={<Reset />} />
+        <Route path="/verify" element={<Verify />} />
+        <Route path="/account" element={<Account />} />
         <Route path="/b/:id" element={<BookPage />} />
         <Route path="/b/:id/write/:cid" element={<Editor />} />
         <Route path="/b/:id/read/:cid" element={<Reader />} />

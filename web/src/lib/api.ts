@@ -9,7 +9,7 @@ export type SearchHit = {
   id: string; title: string; description: string; author: string | null; hasCover: boolean;
   chapterTitles: string[]; chapterCount: number; updatedAt: string;
 };
-export type User = { username: string; display: string };
+export type User = { username: string; display: string; email: string | null; emailVerified: boolean };
 
 export class ApiError extends Error { constructor(message: string, public status: number) { super(message); } }
 

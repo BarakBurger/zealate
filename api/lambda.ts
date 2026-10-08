@@ -4,8 +4,13 @@
  */
 import { handle } from './app.js';
 import { s3Storage, type Storage } from './storage.js';
+import { sesMailer } from './mail.js';
 
 let storage: Storage | null = null;
+// ACCOUNT_MAIL=on once SES may send to anyone. Until then account email stays off (see Ctx.mailer).
+const mailer = process.env.ACCOUNT_MAIL === 'on'
+  ? sesMailer(process.env.AWS_REGION || 'eu-north-1', process.env.MAIL_FROM || 'Zealate <no-reply@zealate.com>')
+  : undefined;
 
 export const handler = async (event: any) => {
   storage ??= await s3Storage(process.env.BUCKET!);
@@ -24,7 +29,7 @@ export const handler = async (event: any) => {
     path: event.rawPath || '/',
     query: new URLSearchParams(event.rawQueryString || ''),
     headers, body,
-  }, { storage, secret: process.env.SESSION_SECRET!, secureCookies: true });
+  }, { storage, secret: process.env.SESSION_SECRET!, secureCookies: true, mailer, site: 'https://zealate.com' });
   const { 'set-cookie': cookie, ...rest } = out.headers || {};
   const isBinary = Buffer.isBuffer(out.body);
   return {

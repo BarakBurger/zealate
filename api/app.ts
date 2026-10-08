@@ -2,18 +2,25 @@
  * The whole Zealate API as one function: a request in, a response out. The local server and the
  * AWS Lambda handler are both thin adapters around {@link handle}, so the same code runs in both.
  */
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import type { Storage } from './storage.js';
 import {
   MIN_PASSWORD, USERNAME_RULE, clearCookie, hashPassword, normalizeUsername, readCookie,
   readSession, sessionCookie, signSession, verifyPassword,
 } from './auth.js';
+import { accountMail, mailLang, type Mailer } from './mail.js';
 
 export type Req = { method: string; path: string; query: URLSearchParams; headers: Record<string, string | undefined>; body: Buffer };
 export type Res = { status: number; headers?: Record<string, string>; body?: string | Buffer };
-export type Ctx = { storage: Storage; secret: string; secureCookies: boolean };
+/** mailer: sends account email (SES on AWS, an outbox folder locally). Without one, no mail goes out. */
+/** mailer: sends account email. Without one, account email is off: no confirmation is asked before
+ *  publishing and no reset is offered, because neither could be delivered. */
+export type Ctx = { storage: Storage; secret: string; secureCookies: boolean; mailer?: Mailer; site?: string };
 
-type User = { username: string; display: string; passwordHash: string; createdAt: string };
+/** email is optional for accounts made before it was asked for. Publishing needs a verified one. */
+type User = { username: string; display: string; passwordHash: string; createdAt: string; email?: string; emailVerified?: boolean };
+/** A single-use link sent by email, stored only as a hash of its token. */
+type Token = { username: string; kind: 'verify' | 'reset'; email: string; exp: number };
 /** isPublic: the chapter's text can be read by anyone (when the book is public). Chapters saved
  *  before this flag existed count as published. */
 type ChapterRef = { id: string; title: string; words: number; updatedAt: string; isPublic?: boolean };
@@ -63,6 +70,49 @@ export const normalizeForSearch = (s: string) =>
 // it resets when a Lambda instance is recycled; it is a speed bump for guessing, not a lock.
 const failures = new Map<string, { count: number; until: number }>();
 
+const userShape = (u: User) => ({ username: u.username, display: u.display, email: u.email || null, emailVerified: !!u.emailVerified });
+
+/** Lower-cased and checked loosely: a real check is the confirmation link itself. */
+const normalizeEmail = (v: unknown) => {
+  const e = typeof v === 'string' ? v.trim().toLowerCase() : '';
+  return e.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e) ? e : '';
+};
+/** Storage keys never hold an address: they hold its hash. */
+const emailKey = (email: string) => createHash('sha256').update(email).digest('hex');
+const tokenKey = (token: string) => createHash('sha256').update(token).digest('hex');
+const TOKEN_TTL = { verify: 48 * 3600_000, reset: 30 * 60_000 } as const;
+
+// How often an address or account may ask for mail. In-memory per Lambda instance, like the login
+// slow-down: it stops a button being hammered, it is not a quota.
+const hits = new Map<string, number[]>();
+const allow = (key: string, max: number, windowMs: number) => {
+  const t = Date.now();
+  const recent = (hits.get(key) || []).filter(x => t - x < windowMs);
+  if (recent.length >= max) { hits.set(key, recent); return false; }
+  recent.push(t); hits.set(key, recent);
+  return true;
+};
+
+const sendLink = async (ctx: Ctx, kind: 'verify' | 'reset', user: User, email: string, lang: ReturnType<typeof mailLang>, site: string) => {
+  if (!ctx.mailer) return;
+  const token = randomBytes(32).toString('base64url');
+  const rec: Token = { username: user.username, kind, email, exp: Date.now() + TOKEN_TTL[kind] };
+  await ctx.storage.putJson(`tokens/${tokenKey(token)}.json`, rec);
+  const link = `${site}/${kind === 'verify' ? 'verify' : 'reset'}?token=${token}`;
+  try { await ctx.mailer(accountMail(kind, lang, email, user.display, link)); }
+  catch (e) { console.error('[zealate] mail failed', kind, e); }
+};
+
+/** A link's token works once: it is deleted as it is read, whether or not it is still in date. */
+const takeToken = async (ctx: Ctx, token: unknown, kind: Token['kind']) => {
+  if (typeof token !== 'string' || !/^[A-Za-z0-9_-]{20,100}$/.test(token)) return null;
+  const key = `tokens/${tokenKey(token)}.json`;
+  const rec = await ctx.storage.getJson<Token>(key);
+  if (!rec) return null;
+  await ctx.storage.delete(key);
+  return rec.kind === kind && rec.exp > Date.now() ? rec : null;
+};
+
 export const handle = async (req: Req, ctx: Ctx): Promise<Res> => {
   try {
     return await route(req, ctx);
@@ -85,37 +135,131 @@ const route = async (req: Req, ctx: Ctx): Promise<Res> => {
 
   // ---------------------------------------------------------------- auth
   if (a === 'auth') {
+    const site = ctx.site || SITE;
+    const body = m === 'GET' ? {} : parseBody(req);
+    if (!body) return fail(400, 'Bad request.');
+    const lang = mailLang(body.lang);
+
     if (b === 'me' && m === 'GET') {
-      if (!me) return json(200, { user: null });
+      const mail = !!ctx.mailer;
+      if (!me) return json(200, { user: null, mail });
       const u = await db.getJson<User>(`users/${me}.json`);
-      return json(200, { user: u ? { username: u.username, display: u.display } : null });
+      return json(200, { user: u ? userShape(u) : null, mail });
     }
     if (b === 'logout' && m === 'POST') return json(200, { ok: true }, { 'set-cookie': clearCookie(ctx.secureCookies) });
-    if ((b === 'signup' || b === 'login') && m === 'POST') {
-      const body = parseBody(req);
-      if (!body) return fail(400, 'Bad request.');
+
+    if (b === 'signup' && m === 'POST') {
       const display = str(body.username, 24);
       const username = normalizeUsername(display);
       const password = typeof body.password === 'string' ? body.password : '';
-      if (b === 'signup') {
-        if (!USERNAME_RULE.test(username)) return fail(400, 'Usernames are 3 to 24 letters, digits, dots, dashes or underscores.');
-        if (password.length < MIN_PASSWORD) return fail(400, `Passwords need at least ${MIN_PASSWORD} characters.`);
-        const user: User = { username, display, passwordHash: await hashPassword(password), createdAt: now() };
-        if (!(await db.createJson(`users/${username}.json`, user))) return fail(409, 'That username is taken.');
-        await db.putJson(`owners/${username}.json`, { books: [] });
-        return json(201, { user: { username, display } }, { 'set-cookie': sessionCookie(signSession(username, ctx.secret), ctx.secureCookies) });
-      }
+      const email = normalizeEmail(body.email);
+      if (!USERNAME_RULE.test(username)) return fail(400, 'Usernames are 3 to 24 letters, digits, dots, dashes or underscores.');
+      if (password.length < MIN_PASSWORD) return fail(400, `Passwords need at least ${MIN_PASSWORD} characters.`);
+      if (!email) return fail(400, 'Enter a valid email address.');
+      if (await db.getJson(`emails/${emailKey(email)}.json`)) return fail(409, 'That email address already has an account.');
+      const user: User = { username, display, passwordHash: await hashPassword(password), createdAt: now(), email, emailVerified: false };
+      if (!(await db.createJson(`users/${username}.json`, user))) return fail(409, 'That username is taken.');
+      await db.putJson(`emails/${emailKey(email)}.json`, { username });
+      await db.putJson(`owners/${username}.json`, { books: [] });
+      await sendLink(ctx, 'verify', user, email, lang, site);
+      return json(201, { user: userShape(user) }, { 'set-cookie': sessionCookie(signSession(username, ctx.secret), ctx.secureCookies) });
+    }
+
+    if (b === 'login' && m === 'POST') {
+      const username = normalizeUsername(str(body.username, 24));
+      const password = typeof body.password === 'string' ? body.password : '';
       const f = failures.get(username);
       if (f && f.count >= 5 && f.until > Date.now()) return fail(429, 'Too many attempts. Wait half a minute and try again.');
       const user = USERNAME_RULE.test(username) ? await db.getJson<User>(`users/${username}.json`) : null;
       const ok = user ? await verifyPassword(password, user.passwordHash) : false;
       if (!ok || !user) {
-        const count = (f?.count || 0) + 1;
-        failures.set(username, { count, until: Date.now() + 30_000 });
+        failures.set(username, { count: (f?.count || 0) + 1, until: Date.now() + 30_000 });
         return fail(401, 'Wrong username or password.');
       }
       failures.delete(username);
-      return json(200, { user: { username, display: user.display } }, { 'set-cookie': sessionCookie(signSession(username, ctx.secret), ctx.secureCookies) });
+      return json(200, { user: userShape(user) }, { 'set-cookie': sessionCookie(signSession(username, ctx.secret), ctx.secureCookies) });
+    }
+
+    // Forgot password: always the same answer, so it cannot be used to learn who has an account.
+    // A reset link goes only to a confirmed address, never to one nobody has proved they own.
+    if (b === 'forgot' && m === 'POST') {
+      const who = str(body.who, 254);
+      const done = json(200, { ok: true });
+      if (!who || !allow(`forgot:${who.toLowerCase()}`, 3, 3600_000)) return done;
+      const email = normalizeEmail(who);
+      const username = email
+        ? (await db.getJson<{ username: string }>(`emails/${emailKey(email)}.json`))?.username
+        : normalizeUsername(who);
+      const user = username && USERNAME_RULE.test(username) ? await db.getJson<User>(`users/${username}.json`) : null;
+      if (user?.email && user.emailVerified) await sendLink(ctx, 'reset', user, user.email, lang, site);
+      return done;
+    }
+
+    if (b === 'reset' && m === 'POST') {
+      const password = typeof body.password === 'string' ? body.password : '';
+      if (password.length < MIN_PASSWORD) return fail(400, `Passwords need at least ${MIN_PASSWORD} characters.`);
+      const tok = await takeToken(ctx, body.token, 'reset');
+      if (!tok) return fail(400, 'This link has expired or was already used. Ask for a new one.');
+      const user = await db.getJson<User>(`users/${tok.username}.json`);
+      if (!user) return fail(400, 'This link has expired or was already used. Ask for a new one.');
+      user.passwordHash = await hashPassword(password);
+      await db.putJson(`users/${user.username}.json`, user);
+      failures.delete(user.username);
+      return json(200, { user: userShape(user) }, { 'set-cookie': sessionCookie(signSession(user.username, ctx.secret), ctx.secureCookies) });
+    }
+
+    if (b === 'verify' && m === 'POST') {
+      const tok = await takeToken(ctx, body.token, 'verify');
+      const user = tok ? await db.getJson<User>(`users/${tok.username}.json`) : null;
+      // The link proves the address it was sent to; if the account has moved to another since, it proves nothing.
+      if (!tok || !user || user.email !== tok.email) return fail(400, 'This link has expired or was already used. Ask for a new one.');
+      user.emailVerified = true;
+      await db.putJson(`users/${user.username}.json`, user);
+      return json(200, { user: userShape(user) });
+    }
+
+    if (!me) return fail(401, 'Please sign in.');
+    const user = await db.getJson<User>(`users/${me}.json`);
+    if (!user) return fail(401, 'Please sign in.');
+
+    if (b === 'resend' && m === 'POST') {
+      if (!user.email || user.emailVerified) return json(200, { ok: true });
+      if (!allow(`resend:${me}`, 1, 60_000)) return fail(429, 'A link was just sent. Wait a minute before asking for another.');
+      await sendLink(ctx, 'verify', user, user.email, lang, site);
+      return json(200, { ok: true });
+    }
+
+    // Add or change the email address: needs the password, and the new address starts unconfirmed.
+    if (b === 'email' && m === 'PUT') {
+      const email = normalizeEmail(body.email);
+      if (!email) return fail(400, 'Enter a valid email address.');
+      if (!(await verifyPassword(typeof body.password === 'string' ? body.password : '', user.passwordHash))) return fail(401, 'Wrong password.');
+      if (email !== user.email) {
+        const owner = await db.getJson<{ username: string }>(`emails/${emailKey(email)}.json`);
+        if (owner && owner.username !== me) return fail(409, 'That email address already has an account.');
+        if (user.email) await db.delete(`emails/${emailKey(user.email)}.json`);
+        await db.putJson(`emails/${emailKey(email)}.json`, { username: me });
+        user.email = email; user.emailVerified = false;
+        await db.putJson(`users/${me}.json`, user);
+      }
+      if (!user.emailVerified && allow(`resend:${me}`, 1, 60_000)) await sendLink(ctx, 'verify', user, email, lang, site);
+      return json(200, { user: userShape(user) });
+    }
+
+    // Delete the account and everything in it: books, chapters, covers, the email address.
+    if (b === 'account' && m === 'DELETE') {
+      if (!(await verifyPassword(typeof body.password === 'string' ? body.password : '', user.passwordHash))) return fail(401, 'Wrong password.');
+      const ids = (await db.getJson<{ books: string[] }>(`owners/${me}.json`))?.books || [];
+      for (const id of ids) {
+        const book = await db.getJson<Book>(`books/${id}/meta.json`);
+        if (book) { book.isPublic = false; await syncIndex(db, book); }
+        await db.deletePrefix(`books/${id}/`);
+        await db.deletePrefix(`covers/${id}/`);
+      }
+      if (user.email) await db.delete(`emails/${emailKey(user.email)}.json`);
+      await db.delete(`owners/${me}.json`);
+      await db.delete(`users/${me}.json`);
+      return json(200, { ok: true }, { 'set-cookie': clearCookie(ctx.secureCookies) });
     }
     return fail(404, 'Not found.');
   }
@@ -205,6 +349,10 @@ const route = async (req: Req, ctx: Ctx): Promise<Res> => {
     if (!body) return fail(400, 'Bad request.');
     if (typeof body.title === 'string') book.title = str(body.title, 160) || 'Untitled';
     if (typeof body.description === 'string') book.description = str(body.description, 1200);
+    if (body.isPublic === true && !book.isPublic && ctx.mailer) {
+      const owner = await db.getJson<User>(`users/${me}.json`);
+      if (!owner?.emailVerified) return json(403, { error: 'Confirm your email address before publishing.', code: 'verify_email' });
+    }
     if (typeof body.isPublic === 'boolean') book.isPublic = body.isPublic;
     if (typeof body.authorPublic === 'boolean') book.authorPublic = body.authorPublic;
     if (typeof body.listPublic === 'boolean') book.listPublic = body.listPublic;

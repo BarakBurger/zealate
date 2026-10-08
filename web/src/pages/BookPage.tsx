@@ -33,8 +33,14 @@ export const BookPage = () => {
   const owner = !!book.isOwner;
 
   const patch = async (body: Partial<Book>) => {
-    const r = await api<{ book: Book }>(`/books/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
-    setBook(r.book);
+    try {
+      const r = await api<{ book: Book }>(`/books/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
+      setBook(r.book);
+    } catch (e: any) {
+      // Publishing waits for a confirmed email: say so, and point to where it is fixed.
+      if (e instanceof ApiError && e.status === 403) { toast(t.verifyToPublish); nav('/account'); }
+      else toast(e.message || t.error);
+    }
   };
   const move = async (i: number, delta: number) => {
     const ids = book.chapters.map(c => c.id);

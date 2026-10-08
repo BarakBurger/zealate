@@ -5,6 +5,7 @@ import { api, type Book } from '../lib/api';
 import { useI18n } from '../lib/i18n';
 import { useAuth } from '../lib/auth';
 import { BookCard } from '../components/BookCover';
+import { VerifyBanner } from './AccountFlows';
 
 export const Desk = () => {
   const { t } = useI18n();
@@ -34,6 +35,7 @@ export const Desk = () => {
         <h1 style={{ fontSize: 'clamp(1.8rem, 4vw, 2.6rem)' }}>{t.myDesk}</h1>
         <span className="muted">{user?.display}</span>
       </div>
+      <VerifyBanner />
       {books === null ? <div className="center"><div className="spinner" role="status" aria-label={t.loading} /></div> : (
         <div className="shelf">
           <div>

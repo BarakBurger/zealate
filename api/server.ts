@@ -6,10 +6,14 @@ import http from 'node:http';
 import path from 'node:path';
 import { handle } from './app.js';
 import { localStorage } from './storage.js';
+import { outboxMailer } from './mail.js';
 
 const PORT = Number(process.env.API_PORT || 8787);
 const storage = localStorage(path.resolve(process.env.DATA_DIR || 'data'));
 const secret = process.env.SESSION_SECRET || 'local-dev-only-secret-change-me';
+// Locally, account email lands in ./data/outbox instead of being sent; the links point at the dev site.
+const mailer = outboxMailer(path.resolve(process.env.DATA_DIR || 'data', 'outbox'));
+const site = process.env.SITE_URL || 'http://localhost:5180';
 
 http.createServer(async (req, res) => {
   const url = new URL(req.url || '/', 'http://localhost');
@@ -19,7 +23,7 @@ http.createServer(async (req, res) => {
     method: req.method || 'GET', path: url.pathname, query: url.searchParams,
     headers: Object.fromEntries(Object.entries(req.headers).map(([k, v]) => [k, Array.isArray(v) ? v.join(', ') : v])),
     body: Buffer.concat(chunks),
-  }, { storage, secret, secureCookies: false });
+  }, { storage, secret, secureCookies: false, mailer, site });
   res.writeHead(out.status, out.headers);
   res.end(out.body);
 }).listen(PORT, () => console.log(`zealate api on http://localhost:${PORT}`));

@@ -1,16 +1,17 @@
 import { useState } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
-import { Eye, EyeSlash, Warning } from '@phosphor-icons/react';
+import { Eye, EyeSlash } from '@phosphor-icons/react';
 import { api, type User } from '../lib/api';
 import { useI18n } from '../lib/i18n';
 import { useAuth } from '../lib/auth';
 
 export const Auth = ({ mode }: { mode: 'login' | 'signup' }) => {
-  const { t } = useI18n();
-  const { user, setUser } = useAuth();
+  const { t, lang } = useI18n();
+  const { user, mail, setUser } = useAuth();
   const nav = useNavigate();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [email, setEmail] = useState('');
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -21,7 +22,7 @@ export const Auth = ({ mode }: { mode: 'login' | 'signup' }) => {
     e.preventDefault();
     setBusy(true); setError('');
     try {
-      const r = await api<{ user: User }>(`/auth/${mode}`, { method: 'POST', body: JSON.stringify({ username, password }) });
+      const r = await api<{ user: User }>(`/auth/${mode}`, { method: 'POST', body: JSON.stringify(signup ? { username, password, email, lang } : { username, password }) });
       setUser(r.user);
       nav('/desk');
     } catch (err: any) { setError(err.message || t.error); } finally { setBusy(false); }
@@ -54,8 +55,16 @@ export const Auth = ({ mode }: { mode: 'login' | 'signup' }) => {
             </div>
             {signup && <span id="p-hint" className="hint">{t.passwordHint}</span>}
           </div>
-          {signup && <div className="notice"><Warning size={18} aria-hidden="true" /><span>{t.noReset}</span></div>}
-          <button className="btn btn-primary" type="submit" disabled={busy || !username || !password}>
+          {signup && (
+            <div className="field">
+              <label htmlFor="e">{t.email}</label>
+              <input id="e" className="input" type="email" dir="ltr" value={email} onChange={e => setEmail(e.target.value)}
+                autoComplete="email" required maxLength={254} aria-describedby="e-hint" />
+              <span id="e-hint" className="hint">{t.emailHint}</span>
+            </div>
+          )}
+          {!signup && mail && <Link to="/forgot" className="muted" style={{ fontSize: '.9rem', justifySelf: 'start' }}>{t.forgotLink}</Link>}
+          <button className="btn btn-primary" type="submit" disabled={busy || !username || !password || (signup && !email)}>
             {busy ? <span className="spinner" aria-hidden="true" /> : null} {signup ? t.signup : t.login}
           </button>
           <p className="muted" style={{ margin: 0, textAlign: 'center' }}>
