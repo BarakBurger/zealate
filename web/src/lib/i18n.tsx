@@ -20,7 +20,7 @@ const isLang = (s: string): s is Lang => s in DICTS;
 const Ctx = createContext<{ lang: Lang; t: Dict; dir: 'rtl' | 'ltr'; setLang: (l: Lang) => void }>(null!);
 
 export const I18nProvider = ({ children }: { children: ReactNode }) => {
-  // index.html already chose the language before first paint (saved choice, then the browser's).
+  // index.html already chose the language before first paint (the visitor's saved choice, else English).
   const [lang, setLang] = useState<Lang>(() => {
     const l = document.documentElement.lang;
     return isLang(l) ? l : 'en';
@@ -28,9 +28,13 @@ export const I18nProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     document.documentElement.lang = lang;
     document.documentElement.dir = isRtlLang(lang) ? 'rtl' : 'ltr';
-    try { localStorage.setItem('z_lang', lang); } catch { /* private mode */ }
   }, [lang]);
-  const value = useMemo(() => ({ lang, t: DICTS[lang], dir: (isRtlLang(lang) ? 'rtl' : 'ltr') as 'rtl' | 'ltr', setLang }), [lang]);
+  // Remembered only when the visitor picks a language; until then every visit opens in English.
+  const choose = (l: Lang) => {
+    setLang(l);
+    try { localStorage.setItem('z_lang', l); } catch { /* private mode */ }
+  };
+  const value = useMemo(() => ({ lang, t: DICTS[lang], dir: (isRtlLang(lang) ? 'rtl' : 'ltr') as 'rtl' | 'ltr', setLang: choose }), [lang]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 };
 export const useI18n = () => useContext(Ctx);

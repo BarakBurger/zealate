@@ -19,13 +19,12 @@
     <!-- Arabic faces are split by unicode-range, so their files download only when Arabic text appears. -->
     <link href="https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@400;500;700&family=Heebo:wght@400;500;600;700&family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,700;1,9..144,500&family=Noto+Naskh+Arabic:wght@400;700&family=Noto+Sans+Arabic:wght@400;600;700&display=swap" rel="stylesheet" />
     <script>
-      // Pick the language before first paint so the page never flips after loading: a saved choice,
-      // then the browser's language, then English.
+      // Pick the language before first paint so the page never flips after loading: the visitor's
+      // own choice from the language menu if they made one, otherwise English.
       try {
         var langs = ['he', 'en', 'ar', 'de', 'es', 'fr'];
         var saved = localStorage.getItem('z_lang');
-        var nav = (navigator.language || '').slice(0, 2).toLowerCase();
-        var l = langs.indexOf(saved) >= 0 ? saved : langs.indexOf(nav) >= 0 ? nav : 'en';
+        var l = langs.indexOf(saved) >= 0 ? saved : 'en';
         document.documentElement.lang = l;
         document.documentElement.dir = (l === 'he' || l === 'ar') ? 'rtl' : 'ltr';
       } catch (e) {}
