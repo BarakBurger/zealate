@@ -207,3 +207,43 @@ test('without a mailer, publishing does not wait for a confirmation that could n
   const id = (await go('POST', '/books', { title: 'Open' }, up.cookie)).data.book.id;
   assert.equal((await go('PATCH', `/books/${id}`, { isPublic: true }, up.cookie)).status, 200);
 });
+
+test('a public book can be read by anyone and changed only by its author', async () => {
+  const { cookie: author } = await verifiedUser('owner1');
+  const { cookie: stranger } = await verifiedUser('stranger1');
+  const id = (await call('POST', '/books', { title: 'Mine' }, author)).data.book.id;
+  const ch = (await call('POST', `/books/${id}/chapters`, { title: 'One' }, author)).data.chapter.id;
+  await call('PUT', `/books/${id}/chapters/${ch}`, { body: 'original text', isPublic: true }, author);
+  await call('PATCH', `/books/${id}`, { isPublic: true, listPublic: true }, author);
+
+  const png = Buffer.from('89504e470d0a1a0a', 'hex');
+  const attempts: [string, string, unknown, Record<string, string>?][] = [
+    ['PATCH', `/books/${id}`, { title: 'Stolen', isPublic: false, authorName: 'Me now' }],
+    ['DELETE', `/books/${id}`, undefined],
+    ['POST', `/books/${id}/chapters`, { title: 'Injected' }],
+    ['PUT', `/books/${id}/chapters/${ch}`, { body: 'defaced', title: 'Defaced', isPublic: false }],
+    ['DELETE', `/books/${id}/chapters/${ch}`, undefined],
+    ['PUT', `/books/${id}/chapters/order`, { ids: [ch] }],
+    ['PUT', `/books/${id}/cover`, png, { 'content-type': 'image/png' }],
+    ['DELETE', `/books/${id}/cover`, undefined],
+  ];
+  for (const who of [stranger, undefined]) {
+    for (const [method, p, body, extra] of attempts) {
+      const r = await call(method, p, body, who, extra);
+      assert.ok(r.status === 401 || r.status === 403, `${who ? 'stranger' : 'visitor'} ${method} ${p} -> ${r.status}`);
+    }
+  }
+
+  // Nothing changed, and everyone can still read it.
+  const after = (await call('GET', `/books/${id}`)).data.book;
+  assert.equal(after.title, 'Mine');
+  assert.equal(after.isPublic, true);
+  assert.deepEqual(after.chapters.map((c: any) => c.title), ['One']);
+  assert.equal(after.hasCover, false);
+  assert.equal((await call('GET', `/books/${id}/chapters/${ch}`)).data.chapter.body, 'original text');
+  assert.equal((await call('GET', `/books/${id}/chapters/${ch}`, undefined, stranger)).data.chapter.body, 'original text');
+  // The reader view tells the page it is not the owner, so no edit controls are offered.
+  assert.equal((await call('GET', `/books/${id}`, undefined, stranger)).data.book.isOwner, false);
+  // And the author still can.
+  assert.equal((await call('PATCH', `/books/${id}`, { title: 'Mine, edited' }, author)).status, 200);
+});
