@@ -79,7 +79,8 @@ export const Editor = () => {
     if (!el) return;
     el.style.height = 'auto';
     el.style.height = `${el.scrollHeight}px`;
-    const pagePx = el.clientWidth * 17 / 11 * 0.82;
+    // The text column is 86% of the page width, and the reader fills 81% of the page height.
+    const pagePx = el.clientWidth / 0.86 * 17 / 11 * 0.81;
     el.style.setProperty('--page-px', `${pagePx}px`);
     setPages(Math.max(1, Math.ceil((body.trim() ? el.scrollHeight : 1) / pagePx)));
   }, [body, chapter]);

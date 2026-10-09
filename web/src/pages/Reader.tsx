@@ -79,10 +79,12 @@ export const Reader = () => {
     let w = h / RATIO;
     if (w * per > box.w) { w = box.w / per; h = w * RATIO; }
     const top = h * 0.085, bottom = h * 0.105;
-    const outer = w * 0.11, inner = two ? w * 0.09 : outer;
+    // Side margins and type size are set for line length: about 9 to 10 words a line, near a
+    // printed paperback, instead of the 7 that wider margins and larger type gave.
+    const outer = w * 0.075, inner = two ? w * 0.065 : outer;
     const colW = w - outer - inner;
     const gap = inner * 2;
-    const font = Math.max(14, Math.min(21, w / 25)) * scale;
+    const font = Math.max(15, Math.min(21, w / 28)) * scale;
     return { two, per, w, h, top, bottom, outer, inner, colW, gap, font, step: per * (colW + gap) };
   }, [box, scale]);
 

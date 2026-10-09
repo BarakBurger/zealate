@@ -258,7 +258,7 @@ main { padding: clamp(20px, 4vw, 48px) clamp(16px, 4vw, 40px) 80px; max-width: 1
 .sheet {
   --sheet-w: min(100%, 36rem);
   width: var(--sheet-w); background: var(--paper); color: var(--ink); border-radius: 3px;
-  box-shadow: var(--shadow-paper); padding: 9% 10% 10%; position: relative;
+  box-shadow: var(--shadow-paper); padding: 9% 7% 10%; position: relative; container-type: inline-size;
   min-height: calc(var(--sheet-w) * 17 / 11);
 }
 .sheet::before { content: ''; position: absolute; inset: 0; pointer-events: none; border-radius: 3px; background: radial-gradient(120% 80% at 50% 0%, transparent 70%, rgba(120,90,40,.06)); }
@@ -268,7 +268,7 @@ main { padding: clamp(20px, 4vw, 48px) clamp(16px, 4vw, 40px) 80px; max-width: 1
 .sheet-rule { width: 64px; height: 2px; background: var(--rust); margin: 8px auto 28px; opacity: .55; border-radius: 2px; }
 .sheet-body {
   width: 100%; border: 0; background: transparent; resize: none; overflow: hidden; display: block;
-  font: 400 1.14rem/1.85 var(--font-book); color: var(--ink); min-height: 50vh; caret-color: var(--rust);
+  font: 400 max(15px, calc(100cqw / 28 / 0.86))/1.62 var(--font-book); color: var(--ink); min-height: 50vh; caret-color: var(--rust);
   background-image: repeating-linear-gradient(to bottom, transparent 0, transparent calc(var(--page-px, 760px) - 1px), rgba(154,52,18,.18) calc(var(--page-px, 760px) - 1px), rgba(154,52,18,.18) var(--page-px, 760px));
 }
 .sheet-body:focus { outline: none; }
